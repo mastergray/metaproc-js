@@ -1,0 +1,19 @@
+{
+  "name": "metaproc",
+  "version": "1.0.0",
+  "description": "Creates \"monad-like\" object with chainable methods that guarnetees executing operations in the order they were declared",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mastergray/metaproc-js.git"
+  },
+  "author": "mastergray",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/mastergray/metaproc-js/issues"
+  },
+  "homepage": "https://github.com/mastergray/metaproc-js#readme"
+}
