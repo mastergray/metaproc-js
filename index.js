@@ -1,8 +1,6 @@
-// CONSTRUCTOR :: [METAPORC.OP(id, fn)], [STATE -> PROMISE(STATE)], [METAPROC.METHOD(id, fn)] -> METAPROC
+// CONSTRUCTOR :: [METAPORC.OP(id, fn)|METAPROC.METHOD(id, fn)], [STATE -> PROMISE(STATE)] -> METAPROC
 // Initializes all given operations and methods, binding them to a new instance:
-module.exports = METAPROC = (OPS, FNS, METHODS) => [METAPROC.initBindings(OPS, FNS), METAPROC.initBindings(METHODS, FNS)]
-  .flat()
-  .reduce((instance, binding) => binding(instance), {
+module.exports = METAPROC = (BINDINGS, FNS) => METAPROC.initBindings(BINDINGS, FNS, {}, {
 
   /**
    *
@@ -12,23 +10,23 @@ module.exports = METAPROC = (OPS, FNS, METHODS) => [METAPROC.initBindings(OPS, F
 
    // (STRING, (*) -> (STATE) -> PROMISE(STATE)) -> METAPROC
    // Binds operation to instance of metaproc:
-  "op":(id, fn) => METAPROC(OPS.concat([METAPROC.OP(id, fn)]), FNS, METHODS),
+  "op":(id, fn) => METAPROC(BINDINGS.concat([METAPROC.OP(id, fn)]), FNS),
 
   // (STRING, (*) -> (METAPROC) -> *) -> METAPROC
   // Binds method to instance of metaproc:
-  "method":(id, fn) => METAPROC(OPS, FNS, METHODS.concat([METAPROC.METHOD(id, fn)])),
+  "method":(id, fn) => METAPROC(BINDINGS.concat([METAPROC.METHOD(id, fn)]), FNS),
 
   // :: (METAPROC) -> METAPROC
   // Concatenates this function stack with function stack of another instance:
-  "chain":(metaproc) => METAPROC(OPS, FNS.concat(metaproc.lift().fns), METHODS),
+  "chain":(metaproc) => METAPROC(BINDINGS, FNS.concat(metaproc.lift().fns)),
 
   // :: (METAPROC) -> METAPROC
   // Concantenates bindings of this instance with the bindings of another instance:
-  "join":(metaproc) => METAPROC(OPS.concat(metaproc.lift().ops), FNS, METHODS.concat(metaproc.lift())),
+  "join":(metaproc) => METAPROC(BINDINGS.concat(metaproc.lift().bindings), FNS),
 
   // :: (VOID) -> {"ops":[METAPROC.OP(id, fn)], "fns":[(STATE) -> PROMISE(STATE)], "methods":[METAPROC.METHOD(id, fn)]}
   // Returns operations and function stack of this instance:
-  "lift":() => ({"ops":OPS,"fns":FNS,"methods":METHODS}),
+  "lift":() => ({"bindings":BINDINGS,"fns":FNS}),
 
   // :: (OBJECT) -> PROMISE(OBJECT)
   // Applies STATE to function stack and returns promise of result:
@@ -50,26 +48,27 @@ module.exports = METAPROC = (OPS, FNS, METHODS) => [METAPROC.initBindings(OPS, F
  *
  */
 
-// :: [[METAPROC.OP(id, fn)]], [[(STATE) -> PROMISE(STATE)]], [[METAPROC.METHOD(id, fn)]] -> METAPROC
-// Static factory method for initalzing an instance of METAPROC from an array of OPS, function stacks, and METHODs:
-// NOTE: All arrays are flattened before instance is intialized:
-METAPROC.init = (ops, fns, methods) => METAPROC(
-  ops !== undefined ? ops.flat() : [],
-  fns !== undefined ? fns.flat() : [],
-  methods !== undefined ?  methods.flat() : []
+// init :: [METAPORC.OP(id, fn)|METAPROC.METHOD(id, fn)], [STATE -> PROMISE(STATE)] -> METAPROC
+// Static factory method for initalzing an instance of METAPROC from an array of BINDINGs and function stacks:
+// NOTE: Arrays are flattened before instance is intialized:
+METAPROC.init = (bindings, fns) => METAPROC(
+  bindings !== undefined ? bindings.flat() : [],
+  fns !== undefined ? fns.flat() : []
 );
 
-// :: ([METAPROC.OP(id, fn)|METAPROC.METHOD(id, fn)], [(STATE) -> PROMISE(STATE)]) -> (METAPROC) -> metaproc
-// Applies binding to context and function stack, return an array of bindings that can be applied to an instance of METAPROC:
-METAPROC.initBindings = (bindings, fns) => ((ctx) => {
-  return bindings.map((binding) => binding(ctx, fns));
-})({});
+// :: ([METAPROC.OP(id, fn)|METAPROC.METHOD(id, fn)], [(STATE) -> PROMISE(STATE)], {STRING:FUNCTION}} , METAPROC) -> METAPROC
+// Returns an instance of metaproc with those given bindings bound:
+// NOTE: This is also where the "binding context" is created to share calls between operations and methods using "this":
+METAPROC.initBindings = (bindings, fns, ctx, metaproc) =>  {
+  return bindings.reduce((metaproc, binding) => binding(metaproc, fns, ctx), metaproc);
+}
 
-// :: (STRING, * -> (STATE) -> PROMISE(STATE)) -> ({STRING:* -> (STATE) -> PROMISE(STATE)}, [(STATE) -> PROMISE(STATE)]) -> (METAPROC) -> METAPROC
+// :: (STRING, * -> (STATE) -> PROMISE(STATE)) -> (METAPROC, [(STATE) -> PROMISE(STATE)], {STRING:FUNCTION}) -> METAPROC
 // Bind operation to instance using given id:
-// NOTE: An "operation" is a function that's applied to the function stack of an instance of METAPROC
-METAPROC.OP = (id, fn) => (ctx, fns) => (metaproc) => {
-  // Bind op to ctx:
+// NOTE: An "operation" is a function that's applied to the function stack of an instance of METAPROC -
+//       the function "fn" must return a promise of STATE
+METAPROC.OP = (id, fn) => (metaproc, fns, ctx) => {
+  // Bind operation to ctx:
   ctx[id] = fn;
   // Arguments are passed to the operation's function since not all operations use the same arguments:
   metaproc[id] = (...args) => {
@@ -80,11 +79,11 @@ METAPROC.OP = (id, fn) => (ctx, fns) => (metaproc) => {
     // Returns instance so that operations are chainable:
     return metaproc;
   }
-  // Returns instance so that another operation can be bound from OPS:
+  // Returns instance so that another operation can be bound from BINDINGS:
   return metaproc;
 };
 
-// :: (OBJECT, (*) -> PROMISE(STATE), {OP_ID:OP_FN}, *) -> *
+// :: (OBJECT, (*) -> PROMISE(STATE), {STRING:FUNCTION}, *) -> *
 // Recursively runs operation until result is a value:
 // NOTE: This is needed when an operation calls another operation since it will return a function:
 METAPROC.OP.run = (STATE, fn, ctx, result) => (async () => {
@@ -101,16 +100,16 @@ METAPROC.OP.run = (STATE, fn, ctx, result) => (async () => {
   return METAPROC.OP.run(STATE,fn, ctx, result)
 })();
 
-// :: (STRING, METAPROC -> *) -> ({STRING: METAPROC -> *}, [(STATE) -> PROMISE(STATE)]) -> (METAPROC) -> METAPROC
-// Binds method to instance of METAPROC:
-METAPROC.METHOD = (id, fn) => (ctx, fns) => (metaproc) => {
-  // Add method to context:
-  ctx[id] = fn;
-  // Bind function to instance using id:
-  metaproc[id] = (...args) => {
-    // All methods are called from a shared methods context so methods can call each other using "this":
-    return fn.apply(null, args).call(ctx, metaproc);
-  }
+// :: (STRING, METAPROC -> *) -> (METAPROC, [(STATE) -> PROMISE(STATE)], {STRING:FUNCTION}) -> METAPROC
+// Bind method to instance using given id:
+// NOTE: A "method" is a function that's applied to the instance that it's bound to.
+//       The function "fn" can return any value, but to be "chainable" - it must return an instance of METAPROC:
+METAPROC.METHOD = (id, fn) => (metaproc, fns, ctx) => {
+  // Bind method to context and instance:
+  // The function is the same for both so methods can be called from other bindings
+  // without having to pass a METAPROC instance
+  metaproc[id] = ctx[id] = (...args) => fn.apply(null, args).call(ctx, metaproc);
+  // Returns instance so that another method can be bound from BINDINGS:
   return metaproc;
 };
 
