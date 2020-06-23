@@ -1,4 +1,4 @@
-const METAPROC = require("../index9.js");
+const METAPROC = require("../index.js");
 const delay = (delay, fn) => (STATE) => new Promise((resolve, reject) => {
   setTimeout(function () {
     try {
