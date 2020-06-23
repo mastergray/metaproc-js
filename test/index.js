@@ -1,40 +1,52 @@
-const METAPROC = require("../index.js")
+const METAPROC = require("../index9.js");
+const delay = (delay, fn) => (STATE) => new Promise((resolve, reject) => {
+  setTimeout(function () {
+    try {
+      resolve(fn(STATE));
+    } catch (err) {
+      reject(err);
+    }
+  }, delay);
+});
+const adder = (time, num) => delay(time, (STATE) => {
+  console.log(`Added ${num} to ${STATE} in ${time} ms...`);
+  return STATE + num;
+})
+
+let a = (STATE) => METAPROC.Standard()
+  .as("x", 5)
+  .as("y", 10)
+  .as("z", 100)
+
+let b = (STATE) => METAPROC.Standard(STATE)
+  .apto("y", adder(1000,6))
+  .apto("x", adder(2000, -7))
+
+let c = (STATE) => METAPROC.Standard(STATE)
+  .aptoif("y", (y) => y > 10, (y) => {throw "Y is to large!"})
+
+let d = (STATE) => METAPROC.Standard(STATE)
+  .augment("adder", (id, delay, value) => (metaproc) => metaproc.apto(id, adder(delay,value)))
+
+let e = (STATE) => METAPROC.Standard(STATE)
+  .absorb(d)
+  .augment("subtractor", (id, delay, value) => (metaproc) => metaproc.adder(id, delay, value * -1))
+  .augment("subtractif", (id, pred, delay, value) => (metaproc) => metaproc.ap((state) => {
+    return pred(state[id], state) === true ? metaproc.subtractor(id, delay, value).join((state) => state) : state
+  }))
+  .subtractif("z", (z) => z !== undefined, 1234, 200)
+
 
 METAPROC.Standard()
-  .as("x", 5)
-  .method("showFN", () => function (metaproc) {
-    let y =  this.ap((STATE) => STATE.y);
-    console.log(y); // This returns an aysnc function because operations need to be applied to state,
-                    // and methods don't have access to state since STATE is only defined when "run" is called,
-                    // and only the function stack is applied to STATE by "run"
-    console.log(`Value: ${metaproc.lift().fns.length}`);
-    return metaproc;
-  })
-  .op("add", (id, num) => async function (STATE) {
-    this.showFN(); // This shows 3 for ap, add, and apto - meaning calls by operations to other operations are
-                   // placing addtional functions on to the stack - so while creating less space (in code)
-                   // the cost is more time - since the function stack to be intialized is larger. Consider
-                   // an "optimized" version of METAPROC.Standard where there are no calls to other calls,
-                   // meaning each Standard op adds only one addtional function to the stack. That's not to say
-                   // referencing ops and methods from other ops shouldn't be possible -
-                   // it's just a trade off to be aware of
-    return this.apto(id, (id) => id + num)
-  })
-  .add("x", 10)
-  .asifnot("y", 5)
-  .showFN()
-  .asif("x", (x) => x > 5, 8000)
-  .aptoif("x", (x) => x < 5, (x) => {
-   throw "no"
-  })
-  .log((STATE) => STATE.x)
-  .as("y", 10)
+  .run(a)
+  .run(b)
+  //.run(c)
+  .run(b)
+  //.run(d)
+  //.run(e)
+  .run(e)
+  //.absorb(e())
+  //.adder("z", 500, 250)
+  //.subtractor("z", 50, 100)
   .log()
-  .showFN()
-  .run({"x":0})
-  .then((STATE) => {
-    console.log("Done.")
-  })
-  .catch((err) => {
-    console.log(err);
-  })
+  .fail()

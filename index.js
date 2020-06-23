@@ -1,6 +1,5 @@
-// CONSTRUCTOR :: [METAPORC.OP(id, fn)|METAPROC.METHOD(id, fn)], [STATE -> PROMISE(STATE)] -> METAPROC
-// Initializes all given operations and methods, binding them to a new instance:
-module.exports = METAPROC = (BINDINGS, FNS) => METAPROC.initBindings(BINDINGS, FNS, {}, {
+// METAPROC :: An extensiable STATE monad for processing asynchronous operations in the order they're defined
+module.exports = METAPROC = (STATE, OPS) => OPS.reduce((metaproc, op) => op(metaproc), {
 
   /**
    *
@@ -8,184 +7,155 @@ module.exports = METAPROC = (BINDINGS, FNS) => METAPROC.initBindings(BINDINGS, F
    *
    */
 
-   // (STRING, (*) -> (STATE) -> PROMISE(STATE)) -> METAPROC
-   // Binds operation to instance of metaproc:
-  "op":(id, fn) => METAPROC(BINDINGS.concat([METAPROC.OP(id, fn)]), FNS),
+  // fmap :: (STATE -> STATE) -> METAPROC
+  // Applies function to "lifted" STATE , then "re-wraps" result in new instance of METAPROC
+  "fmap":(fn) => METAPROC.of(fn(STATE), OPS),
 
-  // (STRING, (*) -> (METAPROC) -> *) -> METAPROC
-  // Binds method to instance of metaproc:
-  "method":(id, fn) => METAPROC(BINDINGS.concat([METAPROC.METHOD(id, fn)]), FNS),
+  // chain :: (STATE, [OP]) -> *
+  // Apply function to "lifted" STATE and OPS:
+  "chain":(fn) => fn(STATE, OPS),
 
-  // :: (METAPROC) -> METAPROC
-  // Concatenates this function stack with function stack of another instance:
-  "chain":(metaproc) => METAPROC(BINDINGS, FNS.concat(metaproc.lift().fns)),
+  // run :: ((STATE) -> METAPROC) -> METAPROC
+  // Applies this STATE to another instance of METAPROC:
+  // NOTE: Given FUNCTION must accept STATE value and return METAPROC instance:
+  "run":(fn) => METAPROC.of(STATE.then((state) => fn(state).chain(state => state)), OPS),
 
-  // :: (METAPROC) -> METAPROC
-  // Concantenates bindings of this instance with the bindings of another instance:
-  "join":(metaproc) => METAPROC(BINDINGS.concat(metaproc.lift().bindings), FNS),
+  // absorb :: ((STATE) -> METAPROC) -> METAPROC
+  // Binds all the methods of the given METAPROC instance to the operations of this METPAROC instance:
+  // NOTE: Given FUNCTION must accept STATE value and return METAPROC instance:
+  "absorb":(fn) => fn(Promise.resolve({})).chain((state, ops) => METAPROC.of(STATE, OPS.concat(ops))),
 
-  // :: (VOID) -> {"ops":[METAPROC.OP(id, fn)], "fns":[(STATE) -> PROMISE(STATE)], "methods":[METAPROC.METHOD(id, fn)]}
-  // Returns operations and function stack of this instance:
-  "lift":() => ({"bindings":BINDINGS,"fns":FNS}),
+  // fail :: (err) -> *
+  // Applies function to "catch" of PROMISE of STATE:
+  // NOTE: If no function is given, then error is written to error console:
+  // NOTE: This must be explicity called by a METAPROC instance, otherwise an uncaught promise notice will be thrown if anything fails:
+  "fail":(fn) => METAPROC.of(fn === undefined ? STATE.catch((err) => console.error(err)) : STATE.catch(fn), OPS),
 
-  // :: (OBJECT) -> PROMISE(OBJECT)
-  // Applies STATE to function stack and returns promise of result:
-  "run":(STATE) =>  FNS.reduce((promise, fn) => {
-    return promise.then(async (STATE) => {
-      try {
-        return await fn(STATE);
-      } catch (err) {
-        throw {"msg":err, "STATE":STATE}
-      }
-    })
-  }, Promise.resolve(STATE))
+  // augment :: (STRING, (METAPROC) -> METAPROC) -> METAPROC
+  // Binds new method to instance of METAPROC:
+  "augment":(id, fn) => METAPROC.of(STATE, OPS.concat([METAPROC.OP(id, fn)])),
 
-});
+})
 
 /**
  *
- *  "Static" Methods
+ * "Static" Methods
  *
  */
 
-// init :: [METAPORC.OP(id, fn)|METAPROC.METHOD(id, fn)], [STATE -> PROMISE(STATE)] -> METAPROC
-// Static factory method for initalzing an instance of METAPROC from an array of BINDINGs and function stacks:
-// NOTE: Arrays are flattened before instance is intialized:
-METAPROC.init = (bindings, fns) => METAPROC(
-  bindings !== undefined ? bindings.flat() : [],
-  fns !== undefined ? fns.flat() : []
+// unit :: (STATE, [[OP]]) -> METAPROC
+// "Unit" monadaic operation for wrapping STATE value in PROMISE:
+// NOTE: If STATE is already is PROMISE, passes value as is to METAPROC:
+METAPROC.of = (STATE, OPS) => METAPROC(
+  STATE === undefined
+    ? Promise.resolve({}) : STATE instanceof Promise
+    ? STATE : Promise.resolve(STATE),
+  OPS || []
 );
 
-// :: ([METAPROC.OP(id, fn)|METAPROC.METHOD(id, fn)], [(STATE) -> PROMISE(STATE)], {STRING:FUNCTION}} , METAPROC) -> METAPROC
-// Returns an instance of metaproc with those given bindings bound:
-// NOTE: This is also where the "binding context" is created to share calls between operations and methods using "this":
-METAPROC.initBindings = (bindings, fns, ctx, metaproc) =>  {
-  return bindings.reduce((metaproc, binding) => binding(metaproc, fns, ctx), metaproc);
+// OP :: (STRING, (METAPROC) -> METAPROC) -> (METAPROC) -> METAPROC
+// OP constructor for binding new methods to METAPROC instance
+// NOTE: "OP" methods apply functions to STATE using monadic operations provided by METAPROC:
+METAPROC.OP = (id, fn) =>  (metaproc) => Object.assign(metaproc, {[id]:(...args) => fn.apply(null, args).call(null, metaproc)})
+
+// ERROR : (STRING) -> STATE -> VOID
+// Throws exception with set message and current STATE value:
+METAPROC.ERROR = (msg) => (STATE) => {
+  throw {"msg":msg, "STATE":STATE}
 }
 
-// :: (STRING, * -> (STATE) -> PROMISE(STATE)) -> (METAPROC, [(STATE) -> PROMISE(STATE)], {STRING:FUNCTION}) -> METAPROC
-// Bind operation to instance using given id:
-// NOTE: An "operation" is a function that's applied to the function stack of an instance of METAPROC -
-//       the function "fn" must return a promise of STATE
-METAPROC.OP = (id, fn) => (metaproc, fns, ctx) => {
-  // Bind operation to ctx:
-  ctx[id] = fn;
-  // Arguments are passed to the operation's function since not all operations use the same arguments:
-  metaproc[id] = (...args) => {
-    // Add function to function stack:
-    fns.push(async (STATE) => {
-      return await METAPROC.OP.run(STATE, () => fn.apply(null, args), ctx);
-    });
-    // Returns instance so that operations are chainable:
-    return metaproc;
-  }
-  // Returns instance so that another operation can be bound from BINDINGS:
-  return metaproc;
-};
-
-// :: (OBJECT, (*) -> PROMISE(STATE), {STRING:FUNCTION}, *) -> *
-// Recursively runs operation until result is a value:
-// NOTE: This is needed when an operation calls another operation since it will return a function:
-METAPROC.OP.run = (STATE, fn, ctx, result) => (async () => {
-  if (result) {
-    // Check if value is a function:
-    if (result instanceof Function) {
-      result = await result.call(ctx, STATE);
-      return METAPROC.OP.run(STATE,fn, ctx, result);
-    }
-    return result;
-  }
-  // Runs operation in context of all operations so operations can call each other using "this":
-  result = await fn().call(ctx, STATE)
-  return METAPROC.OP.run(STATE,fn, ctx, result)
-})();
-
-// :: (STRING, METAPROC -> *) -> (METAPROC, [(STATE) -> PROMISE(STATE)], {STRING:FUNCTION}) -> METAPROC
-// Bind method to instance using given id:
-// NOTE: A "method" is a function that's applied to the instance that it's bound to.
-//       The function "fn" can return any value, but to be "chainable" - it must return an instance of METAPROC:
-METAPROC.METHOD = (id, fn) => (metaproc, fns, ctx) => {
-  // Bind method to context and instance:
-  // The function is the same for both so methods can be called from other bindings
-  // without having to pass a METAPROC instance
-  metaproc[id] = ctx[id] = (...args) => fn.apply(null, args).call(ctx, metaproc);
-  // Returns instance so that another method can be bound from BINDINGS:
-  return metaproc;
-};
-
-// :: [(STATE) -> PROMISE(STATE)] -> METAPROC
-// Returns a new instance of METAPROC initialized with METAPROC.ops:
-METAPROC.Standard = (fns) => METAPROC.init([METAPROC.ops], fns);
 
 /**
  *
- *  Operations
+ *  "Standard" Operations
  *
  */
 
-METAPROC.ops = [
+// Augments METAPROC instance with utility methods for processing STATE with:
+METAPROC.Standard = (STATE, OPS) => METAPROC.of(STATE, OPS)
 
-  // ap :: (STATE -> STATE) -> PROMISE(STATE)
-  // "Applies" function to STATE, returning the result as STATE:
-  METAPROC.OP("ap", (fn) => async function (STATE) {
-    return await fn(STATE);
-  }),
+  /**
+   *
+   *  Function application to STATE
+   *
+   */
 
-  // apif :: (STATE -> BOOLEAN, STATE -> STATE) -> PROMISE(STATE)
+  // ap :: (STATE -> STATE) -> (METAPROC) -> METAPROC
+  // "Applies" function to STATE:
+  .augment("ap", (fn) => (metaproc) => metaproc.fmap((STATE) => STATE.then(fn)))
+
+  // apif :: (STATE) -> BOOLEAN, (STATE) -> STATE -> METAPROC -> METAPROC
   // Only applies function to STATE if predicate applied to STATE is TRUE:
-  METAPROC.OP("apif", (pred, fn) => async function (STATE) {
-    return pred(STATE) === true ? this.ap(fn) : STATE;
-  }),
+  .augment("apif", (pred, fn) => (metaproc) => metaproc.ap(async (state) => await pred(state) ? await fn(state) : state))
 
-  // apifnot :: (STATE -> STATE) -> PROMISE(STATE)
-  // Only applies function to STATE if STATE is undefined:
-  METAPROC.OP("apifnot", (fn) => async function (STATE) {
-      return this.apif((STATE) => STATE === undefined, fn);
-  }),
+  // apifnot :: ((STATE) -> STATE) -> METAPROC -> METAPROC
+  // Only applies function to STATE if STATE is an empty OBJECT:
+  // NOTE: Assumes OBJECT is empty if OBJECT has no "keys":
+  .augment("apifnot", (fn) => (metaproc) => metaproc.apif((state) => Object.keys(state).length === 0 , fn))
 
-  // apto :: (STRING, STATE -> STATE) -> PROMISE(STATE)
-  // Applies function to property of STATE:
-  METAPROC.OP("apto", (id, fn) => async function (STATE) {
-    STATE[id] = await fn(STATE[id], STATE);
-    return STATE;
-  }),
+  // apifonly :: ((STATE) -> STATE) -> METAPROC -> METAPROC
+  // Only applies function to STATE if STATE is not an empty OBJECT:
+  // NOTE: Assumes OBJECT empty if OBJECT has no "keys":
+  .augment("apifonly", (fn) => (metaproc) => metaproc.apif((state) => Object.keys(state).length !== 0 , fn))
 
-  // aptoif :: (STRING, (PROPERTY, STATE) -> BOOLEAN, STATE -> STATE) -> PROMISE(STATE)
-  // Only applies function to property of STATE if predicate applied to PROPERTY and STATE is TRUE:
-  METAPROC.OP("aptoif", (id, pred, fn) => async function (STATE) {
-    return pred(STATE[id], STATE) === true ? this.apto(id, fn) : STATE;
-  }),
+  /**
+   *
+   *  Function application to PROPERTY of STATE
+   *
+   */
 
-  // aptoifnot :: (STRING, STATE -> STATE) -> PROMISE(STATE)
-  // Only applies function to property of STATE if property does not exist:
-  METAPROC.OP("aptoifnot", (id, fn) => async function (STATE) {
-    return this.aptoif(id, (id) => id === undefined, fn);
-  }),
+  // apto :: (STRING, STATE -> STATE) -> (METAPROC) -> METAPROC
+  // Applies function to PROPERTY of STATE:
+  .augment("apto", (id, fn) => (metaproc) => metaproc.ap(async (state) => Object.assign(state, {[id]: await fn(state[id], state)})))
 
-  // as :: (STRING, *) -> PROMISE(STATE)
+  // aptoif :: (STRING, (PROPERTY, STATE) -> BOOLEAN, STATE -> STATE) -> (METAPROC) -> METAPROC
+  // Only applies function to PROPERTY of STATE if predicate applied to PROPERTY and STATE is TRUE:
+  .augment("aptoif", (id, pred, fn) => (metaproc) => metaproc.ap(async (state) => {
+    return await pred(state[id], id) ? await metaproc.apto(id, fn).chain((STATE) => STATE) : state;
+  }))
+
+  // aptoifnot :: (STRING, PROPERTY, STATE -> STATE) -> (METAPROC) -> METAPROC
+  // Only applies function to PROPERTY of STATE if PROPERTY is UNDEFINED:
+  .augment("aptoifnot", (id, fn) => (metaproc) => metaproc.aptoif(id, (id) => id === undefined, fn))
+
+  // aptoifonly :: (STRING, PROPERTY, STATE -> STATE) -> (METAPROC) -> METAPROC
+  // Only applies function to PROPERTY of STATE if PROPERTY is not UNDEFINED:
+  .augment("aptoifonly", (id, fn) => (metaproc) => metaproc.aptoif(id, (id) => id !== undefined, fn))
+
+  /**
+   *
+   *  Value binding to PROPERTY of STATE
+   *
+   */
+
+  // as :: (STRING, *) -> (METAPROC) -> METAPROC
   // Binds value to STATE using given id
-  METAPROC.OP("as", (id, val) => async function (STATE) {
-    return this.apto(id, (id) => val);
-  }),
+  .augment("as", (id, val) => (metaproc) => metaproc.apto(id, (id) => val))
 
-  // asif :: (STRING, (PROPERTY, STATE) -> BOOLEAN, *) -> PROMISE(STATE)
+  // asif :: (STRING, (PROPERTY, STATE) -> BOOLEAN, *) -> (METAPROC) -> METAPROC
   // Only binds value to STATE using given id if predicate applied to PROPERTY and STATE is TRUE:
-  METAPROC.OP("asif", (id, pred, val) => async function (STATE) {
-    return this.aptoif(id, pred, (id) => val);
-  }),
+  .augment("asif", (id, pred, val) => (metaproc) => metaproc.ap(async (state) => {
+    return await pred(state[id], state) ? metaproc.as(id, val).chain((STATE) => STATE) : state
+  }))
 
-  // asifnot :: (STRING, *) -> PROMISE(STATE)
-  // Only binds value to STATE using given id if PROPERTY does not exist:
-  METAPROC.OP("asifnot", (id, val) => async function (STATE) {
-    return this.aptoifnot(id, (id) => val);
-  }),
+  // asifnot :: (STRING, *) -> (METAPROC) -> METAPROC
+  // Only binds value to STATE using given id if PROPERTY is UNDEFINED:
+  .augment("asifnot", (id, val) => (metaproc) => metaproc.asif(id, (id) => id === undefined, val))
 
-  // :: (STATE -> *) -> PROMISE(STATE)
+  // asifonly ::  (STRING, *) -> (METAPROC) -> METAPROC
+  // Only binds value to STATE using given id if PROPERTY is not UNDEFINED:
+  .augment("asifonly", (id, val) => (metaproc) => metaproc.asif(id, (id) => id !== undefined, val))
+
+  /**
+   *
+   *  Logging
+   *
+   */
+
+  // (STATE) -> VOID -> METAPROC -> METAPROC
   // Applies function to STATE and consoles out result
-  // NOTE: If no function is given, all of STATE is consoles out:
-  METAPROC.OP("log", (fn) => async function (STATE) {
-    console.log(fn !== undefined ? await fn(STATE) : STATE);
-    return STATE;
-  })
-
-]
+  // NOTE: If no function is given, all of STATE is consoled out:
+  .augment("log", (fn) => (metaproc) => metaproc.ap(async (state) => {
+    console.log(fn !== undefined ? await fn(state) : state);
+    return state;
+  }))
