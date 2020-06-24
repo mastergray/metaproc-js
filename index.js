@@ -11,19 +11,20 @@ module.exports = METAPROC = (STATE, OPS) => OPS.reduce((metaproc, op) => op(meta
   // Applies function to "lifted" STATE , then "re-wraps" result in new instance of METAPROC
   "fmap":(fn) => METAPROC.of(fn(STATE), OPS),
 
-  // chain :: (STATE, [OP]) -> *
-  // Apply function to "lifted" STATE and OPS:
-  "chain":(fn) => fn(STATE, OPS),
+  // lift :: (STATE, [OP]) -> *
+  // Applies function to "lifted" STATE and OPS values:
+  // NOTE: I realize this could have been "join", but I felt "lift" better described how it's different from "chain":
+  "lift":(fn) => fn(STATE, OPS),
 
-  // run :: ((STATE) -> METAPROC) -> METAPROC
+  // chain :: ((STATE) -> METAPROC) -> METAPROC
   // Applies this STATE to another instance of METAPROC:
   // NOTE: Given FUNCTION must accept STATE value and return METAPROC instance:
-  "run":(fn) => METAPROC.of(STATE.then((state) => fn(state).chain(state => state)), OPS),
+  "chain":(fn) => METAPROC.of(STATE.then((state) => fn(state).lift(state => state)), OPS),
 
   // absorb :: ((STATE) -> METAPROC) -> METAPROC
   // Binds all the methods of the given METAPROC instance to the operations of this METPAROC instance:
   // NOTE: Given FUNCTION must accept STATE value and return METAPROC instance:
-  "absorb":(fn) => fn(Promise.resolve({})).chain((state, ops) => METAPROC.of(STATE, OPS.concat(ops))),
+  "absorb":(fn) => fn(Promise.resolve({})).lift((state, ops) => METAPROC.of(STATE, OPS.concat(ops))),
 
   // fail :: (err) -> *
   // Applies function to "catch" of PROMISE of STATE:
@@ -111,7 +112,7 @@ METAPROC.Standard = (STATE, OPS) => METAPROC.of(STATE, OPS)
   // aptoif :: (STRING, (PROPERTY, STATE) -> BOOLEAN, STATE -> STATE) -> (METAPROC) -> METAPROC
   // Only applies function to PROPERTY of STATE if predicate applied to PROPERTY and STATE is TRUE:
   .augment("aptoif", (id, pred, fn) => (metaproc) => metaproc.ap(async (state) => {
-    return await pred(state[id], id) ? await metaproc.apto(id, fn).chain((STATE) => STATE) : state;
+    return await pred(state[id], id) ? await metaproc.apto(id, fn).lift((STATE) => STATE) : state;
   }))
 
   // aptoifnot :: (STRING, PROPERTY, STATE -> STATE) -> (METAPROC) -> METAPROC
@@ -135,7 +136,7 @@ METAPROC.Standard = (STATE, OPS) => METAPROC.of(STATE, OPS)
   // asif :: (STRING, (PROPERTY, STATE) -> BOOLEAN, *) -> (METAPROC) -> METAPROC
   // Only binds value to STATE using given id if predicate applied to PROPERTY and STATE is TRUE:
   .augment("asif", (id, pred, val) => (metaproc) => metaproc.ap(async (state) => {
-    return await pred(state[id], state) ? metaproc.as(id, val).chain((STATE) => STATE) : state
+    return await pred(state[id], state) ? metaproc.as(id, val).lift((STATE) => STATE) : state
   }))
 
   // asifnot :: (STRING, *) -> (METAPROC) -> METAPROC
