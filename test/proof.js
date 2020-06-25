@@ -22,7 +22,7 @@ let g = (val) => METAPROC.of(val).fmap(p).fmap(q); // Wraps value and applied "p
  */
 
 // :: PROMISE(OBJECT) -> PROMISE(STRING)
-// Lifts value from promise and returns Promise(STRING():
+// Lifts value from promise and returns Promise(STRING):
 // NOTE: Assume value in promise is an OBJECT:
 function toString(promise) {
   return promise.then((STATE) => JSON.stringify(STATE));

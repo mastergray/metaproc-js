@@ -9,7 +9,17 @@ module.exports = METAPROC = (STATE, OPS) => OPS.reduce((metaproc, op) => op(meta
 
   // fmap :: (STATE -> STATE) -> METAPROC
   // Applies function to "lifted" STATE , then "re-wraps" result in new instance of METAPROC
-  "fmap":(fn) => METAPROC.of(fn(STATE), OPS),
+  "fmap":(fn) => METAPROC.of(STATE.then(async (state) => {
+    try {
+      return await fn(state);
+    } catch (err) {
+      if (err.hasOwnProperty("msg") && err.hasOwnProperty("STATE")) {
+          throw err; // Error has been re-caught, so keep on throwing
+      }
+      // Throws error message and current STATE value when error occurs:
+      throw {"msg":err, "STATE":state};
+    }
+  }), OPS),
 
   // lift :: (STATE, [OP]) -> *
   // Applies function to "lifted" STATE and OPS values:
@@ -59,13 +69,6 @@ METAPROC.of = (STATE, OPS) => METAPROC(
 // NOTE: "OP" methods apply functions to STATE using monadic operations provided by METAPROC:
 METAPROC.OP = (id, fn) =>  (metaproc) => Object.assign(metaproc, {[id]:(...args) => fn.apply(null, args).call(null, metaproc)})
 
-// ERROR : (STRING) -> STATE -> VOID
-// Throws exception with set message and current STATE value:
-METAPROC.ERROR = (msg) => (STATE) => {
-  throw {"msg":msg, "STATE":STATE}
-}
-
-
 /**
  *
  *  "Standard" Operations
@@ -83,7 +86,7 @@ METAPROC.Standard = (STATE, OPS) => METAPROC.of(STATE, OPS)
 
   // ap :: (STATE -> STATE) -> (METAPROC) -> METAPROC
   // "Applies" function to STATE:
-  .augment("ap", (fn) => (metaproc) => metaproc.fmap((STATE) => STATE.then(fn)))
+  .augment("ap", (fn) => (metaproc) => metaproc.fmap(fn))
 
   // apif :: (STATE) -> BOOLEAN, (STATE) -> STATE -> METAPROC -> METAPROC
   // Only applies function to STATE if predicate applied to STATE is TRUE:
