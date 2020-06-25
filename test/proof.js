@@ -11,9 +11,9 @@ const METAPROC = require("../index.js");
 let x = {"x":true};                                // Value that can be "wrapped" by monad
 let f = (val) => METAPROC.of(val);                 // Wraps value using monadic "unit" operation
 let m = METAPROC.of({"m":true});                   // Monad with wrapped value
-let p = (val) => {val.x = true; return val};       // A function that binds TRUE to the given value using "y"
+let p = (val) => {val.x = true; return val};       // A function that binds TRUE to the given value using "x"
 let q = (val) => {val.y = true; return val};       // A function that binds TRUE to the given value using "y"
-let g = (val) => METAPROC.of(val).fmap(p).fmap(q); // Wraps value and applied "p" and "q" functions to wrapped value
+let g = (val) => METAPROC.of(val).fmap(p).fmap(q); // Wraps value and applies "p" and "q" functions to wrapped value
 
 /**
  *
