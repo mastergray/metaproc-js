@@ -22,8 +22,8 @@ module.exports = METAPROC = (FNS, OPS) => OPS.reduce((metaproc, op) => op.fn(met
   })
   , OPS),
 
-  // lift :: (STATE, [OP]) -> *
-  // Applies function to "lifted" STATE and OPS values:
+  // lift :: (STATE -> PROMISE(STATE), [OP]) -> *
+  // Applies function to "lifted" FNS and OPS values:
   // NOTE: I realize this could have been "join", but I felt "lift" better described how it's different from "chain":
   "lift":(fn) => fn(FNS, OPS),
 
@@ -62,8 +62,8 @@ METAPROC.of = (FNS, OPS) => METAPROC(
     ? (STATE) => Promise.resolve(STATE)
     : FNS,
   OPS || []
-
 );
+
 // OP :: (STRING, METAPROC -> METAPROC) -> OP
 // OP constructor for binding new methods to METAPROC instance
 // NOTE: "OP" methods apply functions to STATE using monadic operations provided by METAPROC:

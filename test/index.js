@@ -12,11 +12,15 @@ const adder = (time, num) => delay(time, (STATE) => {
   console.log(`Added ${num} to ${STATE} in ${time} ms...`);
   return STATE + num;
 })
+const showError = (err) => {
+  console.error(err);
+  return err;
+}
 
 let a = (STATE) => METAPROC.Standard()
-  .as("x", 5)
-  .as("y", 10)
-  .as("z", 100)
+  .asifnot("x", 5)
+  .asifnot("y", 10)
+  .asifnot("z", 100)
 
 let b = (STATE) => METAPROC.Standard(STATE)
   .apto("y", adder(1000,6))
@@ -31,23 +35,17 @@ let d = (STATE) => METAPROC.Standard(STATE)
 let e = (STATE) => METAPROC.Standard(STATE)
   .absorb(d)
   .augment("subtractor", (id, delay, value) => (metaproc) => metaproc.adder(id, delay, value * -1))
-  .augment("subtractif", (id, pred, delay, value) => (metaproc) => metaproc.ap((state) => {
-    return pred(state[id], state) === true ? metaproc.subtractor(id, delay, value).lift((state) => state) : state
+  .augment("subtractif", (id, pred, delay, value) => (metaproc) => metaproc.ap(async (state) => {
+    return pred(state[id], state) === true ? await metaproc.subtractor(id, delay, value).lift(fns => fns(state)) : state
   }))
   .subtractif("z", (z) => z !== undefined, 1234, 200)
 
-
 METAPROC.Standard()
-  .fail()
-  .chain(a)
-  .chain(b)
-  .chain(c)
-  .chain(b)
-  //.run(d)
-  //.run(e)
+  .chain(a).log()
+  .chain(b).log()
+  .chain(e).log()
   .absorb(e)
-  //.absorb(e())
-  .adder("z", 500, 250)
-  .subtractor("z", 50, 100)
-  .log()
-  .fail()
+  .adder("z", 500, 250).log()
+  .subtractor("z", 50, 100).log()
+  .run({"x":1000})
+.catch(showError)
