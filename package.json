@@ -1,10 +1,11 @@
 {
   "name": "metaproc",
-  "version": "2.1.0",
-  "description": "Creates \"monad-like\" object with chainable methods that guarnetees executing operations in the order they were declared",
+  "version": "3.0.0",
+  "description": "An extensible STATE monad for processing asynchronous operations in the order they're defined",
   "main": "index.js",
   "scripts": {
-    "test": "node ./test/index.js"
+    "test": "node ./test/index.js",
+    "proof":"node ./test/proof.js"
   },
   "repository": {
     "type": "git",

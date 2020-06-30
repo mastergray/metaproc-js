@@ -39,10 +39,6 @@ module.exports = METAPROC = (FNS, OPS) => OPS.reduce((metaproc, op) => op.fn(met
   // Binds new method to instance of METAPROC:
   "augment":(id, fn) => METAPROC.of(FNS, OPS.concat([METAPROC.OP(id, fn)])),
 
-  // deprecate :: (STRING) -> METAPROC
-  // Removes OP by OP.id from this METAPROC instance:
-  "deprecate":(id) => METAPROC.of(FNS, OPS.filter((op) => op.id !== id)),
-
   // :: (FNS -> METAPROC, [STRING]) -> METAPROC
   // Binds all the methods of the given METAPROC instance returned by the given function to this METPAROC instance:
   // NOTE: Optional argument "onlyInclude" only returns OPS that match the OP.ids included in "onlyInclude" array
@@ -71,6 +67,12 @@ METAPROC.OP = (id, fn) => ({
   "id":id,
   "fn":(metaproc) => Object.assign(metaproc, {[id]:(...args) => fn.apply(null, args).call(null, metaproc)})
 })
+
+/**
+ *
+ *  "Standard" Operations
+ *
+ */
 
 // Augments METAPROC instance with utility methods for processing STATE with:
 METAPROC.Standard = (FNS, OPS) => METAPROC.of(FNS, OPS)
