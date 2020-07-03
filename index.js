@@ -27,9 +27,14 @@ module.exports = METAPROC = (FNS, OPS) => OPS.reduce((metaproc, op) => op.fn(met
   // NOTE: I realize this could have been "join", but I felt "lift" better described how it's different from "chain":
   "lift":(fn) => fn(FNS, OPS),
 
-  // chain :: (FNS -> METAPROC) -> METAPROC
-  // Composes this FNS with FNS of another METAPROC instance:
-  "chain":(fn) => fn().lift(fns => METAPROC.of(STATE => fns(FNS(STATE)), OPS)),
+  // :: (METAPROC) -> METAPROC
+  // "Lifts" the FNS of the given METAPROC instance and applies it to the FNS of this instnace of METAPROC:
+  // NOTE: This method does NOT conform to monadic laws!
+  "chains":(metaproc) => metaproc.lift(fns => METAPROC.of(STATE => fns(FNS(STATE)), OPS)),
+
+  // :: (VOID -> METAPROC) -> METAPROC
+  // "Chains" function that returns an instance of METAPROC to this instance of METAPROC:
+  "chain":(fn) => METAPROC.of(FNS, OPS).chains(fn()),
 
   // run :: STATE -> PROMISE(STATE)
   // Applies STATE to FNS, returning PROMISE of result:
@@ -39,16 +44,26 @@ module.exports = METAPROC = (FNS, OPS) => OPS.reduce((metaproc, op) => op.fn(met
   // Binds new method to instance of METAPROC:
   "augment":(id, fn) => METAPROC.of(FNS, OPS.concat([METAPROC.OP(id, fn)])),
 
-  // :: (FNS -> METAPROC, [STRING]) -> METAPROC
+  // :: (METAPROC, [STRING]) -> METAPROC
   // Binds all the methods of the given METAPROC instance returned by the given function to this METPAROC instance:
   // NOTE: Optional argument "onlyInclude" only returns OPS that match the OP.ids included in "onlyInclude" array
-  "absorb":(fn, onlyInclude) => METAPROC(FNS, OPS.concat(
+  "absorbs":(metaproc, onlyInclude) => METAPROC(FNS, OPS.concat(
     onlyInclude === undefined
-      ? fn().lift((FNS, OPS) => OPS)
-      : fn().lift((FNS, OPS) => OPS.filter(op => onlyInclude.includes(op.id)))
-  ))
+      ? metaproc.lift((FNS, OPS) => OPS)
+      : metaproc.lift((FNS, OPS) => OPS.filter(op => onlyInclude.includes(op.id)))
+  )),
+
+  // :: (VOID -> METAPROC) -> METAPROC
+  // "Absorbs" OPS from METAPROC instance returned from given function:
+  "absorb":(fn, onlyInclude) => METAPROC.of(OPS, FNS).absorbs(fn(), onlyInclude),
 
 })
+
+/**
+ *
+ *  "Static" Methods
+ *
+ */
 
 // of :: (STATE -> PROMISE(STATE), [OP]) -> METAPROC
 // "Unit" monadaic operation for initializing METAPROC "FNS" and "OPS" arguments:
@@ -56,7 +71,7 @@ module.exports = METAPROC = (FNS, OPS) => OPS.reduce((metaproc, op) => op.fn(met
 METAPROC.of = (FNS, OPS) => METAPROC(
   FNS === undefined
     ? (STATE) => Promise.resolve(STATE)
-    : FNS,
+    : (STATE) => STATE instanceof Promise ? FNS(STATE) : Promise.resolve(FNS(STATE)),
   OPS || []
 );
 
