@@ -8,12 +8,12 @@ const METAPROC = require("../index.js");
  *
  */
 
-let x = (STATE) => STATE * 2;                      // Value that can be "wrapped" by monad
-let f = (FNS) => METAPROC.of(FNS);                 // Wraps value using monadic "unit" operation
-let m = METAPROC.of((STATE) => STATE + 5);         // Monad with wrapped value
-let p = (STATE) => STATE + 10;                     // A function that adds 10 to STATE
-let q = (STATE) => STATE + 100;                    // A function that adds 100 to STATE
-let g = (FNS) => METAPROC.of(FNS).fmap(p).fmap(q); // Wraps value and applies "p" and "q" functions to wrapped value
+let x = {"x":true};                                // Value that can be "wrapped" by monad
+let f = (val) => METAPROC.of(val);                 // Wraps value using monadic "unit" operation
+let m = METAPROC.of({"m":true});                   // Monad with wrapped value
+let p = (val) => {val.x = true; return val};       // A function that binds TRUE to the given value using "y"
+let q = (val) => {val.y = true; return val};       // A function that binds TRUE to the given value using "y"
+let g = (val) => METAPROC.of(val).fmap(p).fmap(q); // Wraps value and applied "p" and "q" functions to wrapped value
 
 /**
  *
@@ -21,14 +21,21 @@ let g = (FNS) => METAPROC.of(FNS).fmap(p).fmap(q); // Wraps value and applies "p
  *
  */
 
+// :: PROMISE(OBJECT) -> PROMISE(STRING)
+// Lifts value from promise and returns Promise(STRING):
+// NOTE: Assume value in promise is an OBJECT:
+function toString(promise) {
+  return promise.then((STATE) => JSON.stringify(STATE));
+}
+
 // :: (STRING, METAPROC, METAPROC) -> VOID
 // Display message and result of comparing the "wrapped" value of one monad with the "wrapped" value of another:
 function isEq(msg, ma, mb) {
-  return (async (state) => {
-    let a = await ma.run(state);
-    let b = await mb.run(state);
+  return (async () => {
+    let a = await ma.lift(toString);
+    let b = await mb.lift(toString);
     console.log(`${msg} | ${a === b}`);
-  })(5);
+  })();
 }
 
 /**

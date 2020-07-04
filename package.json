@@ -1,6 +1,6 @@
 {
   "name": "metaproc",
-  "version": "3.1.0",
+  "version": "4.0.0",
   "description": "An extensible STATE monad for processing asynchronous operations in the order they're defined",
   "main": "index.js",
   "scripts": {
