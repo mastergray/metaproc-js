@@ -49,9 +49,9 @@ METAPROC = (STATE, OPS) => OPS.reduce((metaproc, op) => op.fn(metaproc), {
   // Applies function to "catch" of PROMISE of STATE:
   // NOTE: If no function is given, then error is written to error console:
   // NOTE: This must be explicity called by a METAPROC instance, otherwise an uncaught promise notice will be thrown if anything fails:
-  "fail":(fn) => METAPROC.of(fn === undefined ? STATE.catch((err) => console.error(err)) : STATE.catch(fn), OPS),
+  "fail":(fn) => METAPROC.of(fn === undefined ? STATE.catch((err) => console.error(err)) : STATE.catch(fn), OPS)
 
-})
+});
 
 /**
  *
@@ -75,7 +75,7 @@ METAPROC.of = (STATE, OPS) => METAPROC(
 METAPROC.OP = (id, fn) => ({
   "id":id,
   "fn":(metaproc) => Object.assign(metaproc, {[id]:(...args) => fn.apply(null, args).call(null, metaproc)})
-})
+});
 
 /**
  *
@@ -170,4 +170,4 @@ METAPROC.Standard = (STATE, OPS) => METAPROC.of(STATE, OPS)
   .augment("log", (fn) => (metaproc) => metaproc.ap(async (state) => {
     console.log(fn !== undefined ? await fn(state) : state);
     return state;
-  }))
+  }));
