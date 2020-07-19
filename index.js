@@ -123,7 +123,7 @@ METAPROC.Standard = (STATE, OPS) => METAPROC.of(STATE, OPS)
   // aptoif :: (STRING, (PROPERTY, STATE) -> BOOLEAN, STATE -> STATE) -> (METAPROC) -> METAPROC
   // Only applies function to PROPERTY of STATE if predicate applied to PROPERTY and STATE is TRUE:
   .augment("aptoif", (id, pred, fn) => (metaproc) => metaproc.ap(async (state) => {
-    return await pred(state[id], id) ? await metaproc.apto(id, fn).lift((STATE) => STATE) : state;
+    return await pred(state[id], state) ? await metaproc.apto(id, fn).lift((STATE) => STATE) : state;
   }))
 
   // aptoifnot :: (STRING, PROPERTY, STATE -> STATE) -> (METAPROC) -> METAPROC
